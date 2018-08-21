@@ -1,0 +1,34 @@
+{
+  "name": "CyberSource Notifier",
+  "version": "1.0",
+  "description": "Notifies user when CyberSource is logging out",
+  "permissions": [
+      "declarativeContent", 
+      "storage",
+      "notifications",
+      "webNavigation",
+      "alarms",
+      "tabs"
+    ],
+  "options_page": "options.html",
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+  "page_action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/credit_card16.png",
+      "32": "images/credit_card32.png",
+      "48": "images/credit_card48.png",
+      "128": "images/credit_card128.png"
+    }
+  },
+  "icons": {
+    "16": "images/credit_card16.png",
+    "32": "images/credit_card32.png",
+    "48": "images/credit_card48.png",
+    "128": "images/credit_card128.png"
+  },
+  "manifest_version": 2
+}
