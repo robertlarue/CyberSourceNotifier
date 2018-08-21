@@ -1,7 +1,7 @@
 {
   "name": "CyberSource Notifier",
-  "version": "1.0",
-  "description": "Notifies user when CyberSource is logging out",
+  "version": "0.0.1",
+  "description": "Notifies user when CyberSource is inactive and when session has ended",
   "permissions": [
       "declarativeContent", 
       "storage",
@@ -10,12 +10,11 @@
       "alarms",
       "tabs"
     ],
-  "options_page": "options.html",
   "background": {
     "scripts": ["background.js"],
     "persistent": false
   },
-  "page_action": {
+  "browser_action": {
     "default_popup": "popup.html",
     "default_icon": {
       "16": "images/credit_card16.png",

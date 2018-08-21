@@ -7,25 +7,7 @@
 var sessionTimer = null;
 
 chrome.runtime.onInstalled.addListener(function() {
-    chrome.storage.sync.set({warningInterval: 1, expireInterval: 2});
-    chrome.declarativeContent.onPageChanged.removeRules(undefined, function() {
-        chrome.declarativeContent.onPageChanged.addRules([{
-            conditions: [
-                new chrome.declarativeContent.PageStateMatcher({
-                    pageUrl: {hostEquals: 'ebctest.cybersource.com'},
-                }),
-                new chrome.declarativeContent.PageStateMatcher({
-                    pageUrl: {hostEquals: 'ebc.cybersource.com'}
-                }),
-                new chrome.declarativeContent.PageStateMatcher({
-                    pageUrl: {hostEquals: 'businesscenter.cybersource.com'}
-                })
-            ],
-            actions: [
-                new chrome.declarativeContent.ShowPageAction()
-            ]
-        }]);
-    });
+    chrome.storage.sync.set({keepAliveInterval: 9, warningInterval: 13, expireInterval: 15});
 });
 
 chrome.webNavigation.onCompleted.addListener(function(e){
@@ -33,30 +15,14 @@ chrome.webNavigation.onCompleted.addListener(function(e){
     chrome.tabs.get(e.tabId, function(tab){
         console.log("Tab Title: " + tab.title)
         if(!tab.title.includes("Login")){
-            console.log("Creating alarm warningAlarm");
-            
-            var settings = null;
-            chrome.storage.sync.get(['warningInterval','expireInterval'], function(result){
-                setInterval()
-                chrome.browserAction.setBadgeText("")
-                settings = result;
-                chrome.alarms.create("warningAlarm", {delayInMinutes: settings.warningInterval});
-                chrome.alarms.create("expirationAlarm", {delayInMinutes: settings.expireInterval});
-                if(!chrome.alarms.onAlarm.hasListeners()){
-                    console.log("Adding alarm listener");
-                    chrome.alarms.onAlarm.addListener(function(alarm){
-                        if(alarm.name == "warningAlarm"){
-                            console.log(alarm.name + " firing now");
-                            chrome.notifications.create("warningNotification", {type: "basic", iconUrl: null, title: "Cybersource Session Inactive", message: "Click this message to remain logged in"})
-                        }
-                        if(alarm.name == "expirationAlarm"){
-                            console.log(alarm.name + " firing now");
-                            chrome.notifications.create("expireNotification", {type: "basic", iconUrl: null, title: "Cybersource Session Ended", message: "Session has ended after " + settings.expireInterval + " minutes of inactivity"})
-                            logout();
-                        }
-                    });
-                }
-            }); 
+            if(tab.id != keepAliveTabId){
+                chrome.storage.sync.get(['keepAliveInterval','warningInterval','expireInterval'], function(result){
+                    startSessionTimer(result.keepAliveInterval, result.warningInterval, result.expireInterval);
+                }); 
+            }
+        }
+        else{
+            chrome.browserAction.setBadgeText({text: ""});
         }
     })
 },{url: [{hostEquals: 'ebc.cybersource.com'},{hostEquals: 'ebctest.cybersource.com'},{hostEquals: 'businesscenter.cybersource.com'}]})
@@ -66,19 +32,32 @@ if(!chrome.notifications.onClicked.hasListeners()){
     chrome.notifications.onClicked.addListener(function(notificationId, byUser){
         if(notificationId == "warningNotification"){
             duplicatePage();
+            chrome.notifications.clear(notificationId);
         }
     })
 }
 
-function duplicatePage(){
+var keepAliveTabId = null;
+
+function duplicatePage(isKeepAlive = false){
     chrome.tabs.query({url: ["https://ebctest.cybersource.com/*","https://ebc.cybersource.com/*","https://businesscenter.cybersource.com/*"]}, function(tabs){
         tabs.forEach(tab => {
             console.log("Duplicating tab " + tab.id)
-            chrome.tabs.duplicate(tab.id, function(tab){
-                console.log("Removing tab " + tab.id)
-                chrome.tabs.remove(tab.id,function(){
-                    console.log("Removed tab")
-                })
+            chrome.tabs.create({url: tab.url, active: false}, function(newTab){
+                if(isKeepAlive){
+                    keepAliveTabId = newTab.id;
+                }
+                var checkTabLoadedInterval = setInterval(function(){
+                    chrome.tabs.get(newTab.id, function(tabFound){
+                        if(tabFound.status == "complete"){
+                            console.log("Removing tab " + tabFound.id)
+                            chrome.tabs.remove(tabFound.id,function(){
+                                console.log("Removed tab")
+                            })
+                            clearInterval(checkTabLoadedInterval);
+                        }
+                    })
+                }, 500)
             })
         });
     })
@@ -89,14 +68,16 @@ function logout(){
         tabs.forEach(tab => {
             console.log("Logging out " + tab.id)
             var logoutUrl = tab.favIconUrl.replace("images/favicon.ico", "login/Logout.do")
-            chrome.tabs.update({url: logoutUrl},function(){
+            chrome.tabs.update(tab.id, {url: logoutUrl},function(){
                 console.log("Logged out")
+                chrome.notifications.clear("warningNotification");
             })
         });
     })
 }
 
-function startSessionTimer(warningInterval, expireInterval){
+
+function startSessionTimer(keepAliveInterval, warningInterval, expireInterval){
     var sessionStartDate = new Date();
     var lastKeepAliveDate = new Date();
     var countdownStarted = false;
@@ -107,18 +88,21 @@ function startSessionTimer(warningInterval, expireInterval){
         var intervalDate = new Date();
         var sessionSeconds = Math.floor((intervalDate - sessionStartDate) / 1000);
         var keepAliveSeconds = Math.floor((intervalDate - lastKeepAliveDate) / 1000);
-        if(keepAliveSeconds >= 60 ){
+        if(keepAliveSeconds >= 60 * keepAliveInterval ){
             lastKeepAliveDate = new Date();
-            dismissNotification();
+            duplicatePage(true);
         }
         if(sessionSeconds >= 60 * warningInterval && !countdownStarted){
             countdownStarted = true;
-            startCountdown();
+            chrome.notifications.create("warningNotification", {type: "basic", iconUrl: "./images/credit_card128.png", title: "Cybersource Session Inactive", message: "Click this message to remain logged in", requireInteraction: true})
         }
         if(sessionSeconds >= 60 * expireInterval){
-            closeIdleNotification();
-            showTimeoutNotification();
+            chrome.notifications.create("expireNotification", {type: "basic", iconUrl: "./images/credit_card128.png", title: "Cybersource Session Ended", message: "Session has ended after " + expireInterval + " minutes of inactivity"})
             logout();
+            clearInterval(sessionTimer);
         }
+        var badgeSeconds = (expireInterval * 60 - sessionSeconds) % 60;
+        var badgeMinutes = Math.floor((expireInterval * 60 - sessionSeconds) / 60);
+        chrome.browserAction.setBadgeText({text: badgeMinutes + ":" + ("00" + badgeSeconds).slice(-2)});
     }, 1000);
 }
