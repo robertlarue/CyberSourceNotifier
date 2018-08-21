@@ -17,6 +17,7 @@ chrome.webNavigation.onCompleted.addListener(function(e){
         if(!tab.title.includes("Login")){
             if(tab.id != keepAliveTabId){
                 chrome.storage.sync.get(['keepAliveInterval','warningInterval','expireInterval'], function(result){
+                    chrome.notifications.clear("warningNotification");
                     startSessionTimer(result.keepAliveInterval, result.warningInterval, result.expireInterval);
                 }); 
             }
