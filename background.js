@@ -1,9 +1,12 @@
 'use strict';
 
 var sessionTimer = null;
+var favIconUrl = null;
 
-chrome.runtime.onInstalled.addListener(function() {
-    chrome.storage.sync.set({keepAliveInterval: 9, warningInterval: 13, expireInterval: 15});
+chrome.runtime.onInstalled.addListener(function(details) {
+    if(details.reason == "install"){
+        chrome.storage.sync.set({keepAliveInterval: 9, warningInterval: 13, expireInterval: 15});
+    }
 });
 
 chrome.webNavigation.onCompleted.addListener(function(e){
@@ -11,6 +14,9 @@ chrome.webNavigation.onCompleted.addListener(function(e){
     chrome.tabs.get(e.tabId, function(tab){
         console.log("Tab Title: " + tab.title)
         if(!tab.title.includes("Login")){
+            if(tab.favIconUrl != null){
+                favIconUrl = tab.favIconUrl;
+            }
             var keepAliveTabIndex = keepAliveTabIds.indexOf(tab.id)
             if(keepAliveTabIndex == -1){
                 chrome.storage.sync.get(['keepAliveInterval','warningInterval','expireInterval'], function(result){
@@ -24,9 +30,10 @@ chrome.webNavigation.onCompleted.addListener(function(e){
         }
         else{
             chrome.browserAction.setBadgeText({text: ""});
+            clearInterval(sessionTimer);
         }
-    })
-},{url: [{hostEquals: 'ebc.cybersource.com'},{hostEquals: 'ebctest.cybersource.com'},{hostEquals: 'businesscenter.cybersource.com'}]})
+    });
+},{url: [{hostEquals: 'ebc.cybersource.com'},{hostEquals: 'ebctest.cybersource.com'},{hostEquals: 'businesscenter.cybersource.com'}]});
 
 if(!chrome.notifications.onClicked.hasListeners()){
     console.log("Adding Notification Listener");
@@ -35,16 +42,25 @@ if(!chrome.notifications.onClicked.hasListeners()){
             duplicatePage();
             chrome.notifications.clear(notificationId);
         }
-    })
+    });
 }
 
 var keepAliveTabIds = [];
 
 function duplicatePage(isKeepAlive = false){
     chrome.tabs.query({url: ["https://ebctest.cybersource.com/*","https://ebc.cybersource.com/*","https://businesscenter.cybersource.com/*"]}, function(tabs){
+        if(tabs.length == 0 && !isKeepAlive){
+            var virtualTerminalUrl = favIconUrl.replace("images/favicon.ico","virtualterminal/VirtualTerminalLoad.do");
+            chrome.tabs.create({url: virtualTerminalUrl}, function(newTab){
+                console.log("Opened virtual terminal in tab ID " + newTab.id);
+            });
+        }
+        if(tabs.length == 0 && isKeepAlive){
+            tabs.push({url: favIconUrl})
+        }
         tabs.forEach(tab => {
-            console.log("Duplicating tab " + tab.id)
-            chrome.tabs.create({url: tab.url, active: false}, function(newTab){
+            console.log("Duplicating tab " + tab.id);
+            chrome.tabs.create({url: tab.url, active: false, windowId: tab.windowId, openerTabId: tab.id}, function(newTab){
                 if(isKeepAlive){
                     keepAliveTabIds.push(newTab.id);
                 }
@@ -58,23 +74,35 @@ function duplicatePage(isKeepAlive = false){
                             clearInterval(checkTabLoadedInterval);
                         }
                     })
-                }, 500)
-            })
+                }, 500);
+            });
         });
-    })
+    });
 }
 
 function logout(){
     chrome.tabs.query({url: ["https://ebctest.cybersource.com/*","https://ebc.cybersource.com/*","https://businesscenter.cybersource.com/*"]}, function(tabs){
-        tabs.forEach(tab => {
-            console.log("Logging out " + tab.id)
-            var logoutUrl = tab.favIconUrl.replace("images/favicon.ico", "login/Logout.do")
-            chrome.tabs.update(tab.id, {url: logoutUrl},function(){
-                console.log("Logged out")
-                chrome.notifications.clear("warningNotification");
-            })
-        });
-    })
+        if(tabs.length == 0){
+            var logoutUrl = favIconUrl.replace("images/favicon.ico", "login/Logout.do");
+            chrome.tabs.create({url: logoutUrl}, function(newTab){
+                console.log("Logged out");
+            });
+        }
+        else{
+            tabs.forEach(tab => {
+                console.log("Logging out " + tab.id);
+                var tabFavIconUrl = tab.favIconUrl;
+                if(tabFavIconUrl == null){
+                    tabFavIconUrl = favIconUrl;
+                }
+                var logoutUrl = tabFavIconUrl.replace("images/favicon.ico", "login/Logout.do");
+                chrome.tabs.update(tab.id, {url: logoutUrl},function(){
+                    console.log("Logged out");
+                })
+            });
+        }
+        chrome.notifications.clear("warningNotification");
+    });
 }
 
 
@@ -95,12 +123,13 @@ function startSessionTimer(keepAliveInterval, warningInterval, expireInterval){
         }
         if(sessionSeconds >= 60 * warningInterval && !countdownStarted){
             countdownStarted = true;
-            chrome.notifications.create("warningNotification", {type: "basic", iconUrl: "./images/credit_card128.png", title: "Cybersource Session Inactive", message: "Click this message to remain logged in", requireInteraction: true})
+            chrome.notifications.create("warningNotification", {type: "basic", iconUrl: "./images/credit_card128.png", title: "Cybersource Session Inactive", message: "Click this message to remain logged in", requireInteraction: true});
         }
         if(sessionSeconds >= 60 * expireInterval){
-            chrome.notifications.create("expireNotification", {type: "basic", iconUrl: "./images/credit_card128.png", title: "Cybersource Session Ended", message: "Session has ended after " + expireInterval + " minutes of inactivity"})
+            chrome.notifications.create("expireNotification", {type: "basic", iconUrl: "./images/credit_card128.png", title: "Cybersource Session Ended", message: "Session has ended after " + expireInterval + " minutes of inactivity"});
             logout();
             clearInterval(sessionTimer);
+            chrome.browserAction.setBadgeText({text: ""});
         }
         var badgeSeconds = (expireInterval * 60 - sessionSeconds) % 60;
         var badgeMinutes = Math.floor((expireInterval * 60 - sessionSeconds) / 60);
