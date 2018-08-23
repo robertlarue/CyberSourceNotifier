@@ -11,11 +11,15 @@ chrome.webNavigation.onCompleted.addListener(function(e){
     chrome.tabs.get(e.tabId, function(tab){
         console.log("Tab Title: " + tab.title)
         if(!tab.title.includes("Login")){
-            if(tab.id != keepAliveTabId){
+            var keepAliveTabIndex = keepAliveTabIds.indexOf(tab.id)
+            if(keepAliveTabIndex == -1){
                 chrome.storage.sync.get(['keepAliveInterval','warningInterval','expireInterval'], function(result){
                     chrome.notifications.clear("warningNotification");
                     startSessionTimer(result.keepAliveInterval, result.warningInterval, result.expireInterval);
                 }); 
+            }
+            else{
+                keepAliveTabIds.splice(keepAliveTabIndex);
             }
         }
         else{
@@ -34,7 +38,7 @@ if(!chrome.notifications.onClicked.hasListeners()){
     })
 }
 
-var keepAliveTabId = null;
+var keepAliveTabIds = [];
 
 function duplicatePage(isKeepAlive = false){
     chrome.tabs.query({url: ["https://ebctest.cybersource.com/*","https://ebc.cybersource.com/*","https://businesscenter.cybersource.com/*"]}, function(tabs){
@@ -42,7 +46,7 @@ function duplicatePage(isKeepAlive = false){
             console.log("Duplicating tab " + tab.id)
             chrome.tabs.create({url: tab.url, active: false}, function(newTab){
                 if(isKeepAlive){
-                    keepAliveTabId = newTab.id;
+                    keepAliveTabIds.push(newTab.id);
                 }
                 var checkTabLoadedInterval = setInterval(function(){
                     chrome.tabs.get(newTab.id, function(tabFound){
