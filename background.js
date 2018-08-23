@@ -49,14 +49,14 @@ var keepAliveTabIds = [];
 
 function duplicatePage(isKeepAlive = false){
     chrome.tabs.query({url: ["https://ebctest.cybersource.com/*","https://ebc.cybersource.com/*","https://businesscenter.cybersource.com/*"]}, function(tabs){
+        var virtualTerminalUrl = favIconUrl.replace("images/favicon.ico","virtualterminal/VirtualTerminalLoad.do");    
         if(tabs.length == 0 && !isKeepAlive){
-            var virtualTerminalUrl = favIconUrl.replace("images/favicon.ico","virtualterminal/VirtualTerminalLoad.do");
             chrome.tabs.create({url: virtualTerminalUrl}, function(newTab){
                 console.log("Opened virtual terminal in tab ID " + newTab.id);
             });
         }
         if(tabs.length == 0 && isKeepAlive){
-            tabs.push({url: favIconUrl})
+            tabs.push({url: virtualTerminalUrl})
         }
         tabs.forEach(tab => {
             console.log("Duplicating tab " + tab.id);
