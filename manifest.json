@@ -1,6 +1,6 @@
 {
   "name": "CyberSource Notifier",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Notifies user when CyberSource is inactive and when session has ended",
   "permissions": [ 
       "storage",
