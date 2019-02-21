@@ -1,3 +1,5 @@
+![Chrome Web Store](https://img.shields.io/chrome-web-store/users/nmodndfdjgohmieaeogbgegaafnicgng.svg)
+
 # CyberSource Notifier
 
 Available on the Chrome Web Store [CyberSource Notifier](https://chrome.google.com/webstore/detail/cybersource-notifier/nmodndfdjgohmieaeogbgegaafnicgng?utm_source=gmail)
